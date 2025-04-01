@@ -27,7 +27,7 @@ The original "Bangs for Google" is available through the [Firefox Add-On Platfor
 If you prefer to install the latest version directly from the source code:
 
 1. Download or clone this repository to your computer
-2. Open Chrome and navigate to `chrome://extensions`
+2. Open Chrome (or any other chrome based browser) and navigate to `chrome://extensions` or `<your_browser>://extensions`
 3. Enable "Developer mode" by toggling the switch in the top right corner
 4. Click the "Load unpacked" button
 5. Select the folder containing the extension files (the folder with manifest.json)
