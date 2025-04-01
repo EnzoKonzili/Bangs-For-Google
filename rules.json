@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "regexSubstitution": "https://www.duckduckgo.com/?q=\\1"
+      }
+    },
+    "condition": {
+      "regexFilter": "^https?://(?:www\\.)?google\\.[^/]+/search.*[?&]q=(![^&]*)",
+      "resourceTypes": ["main_frame"]
+    }
+  }
+]

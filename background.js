@@ -1,108 +1,172 @@
 let bangs = [];
 
+// Ensure the service worker stays active to handle omnibox events
+chrome.runtime.onStartup.addListener(() => {
+  console.log("Extension started");
+});
+
+// Keep the service worker alive
+const keepAlive = () => setInterval(() => {
+  console.log("Keeping service worker alive");
+}, 20000);
+
+// Start the keep-alive interval when the service worker starts
+keepAlive();
+
 // Get current list of Bangs from DuckDuckGo
-(async () => {
-  const res = await fetch("https://duckduckgo.com/bang.js");
-  bangs = await res.json();
-})();
-
-chrome.webRequest.onBeforeRequest.addListener(({ url }) => {
-  // Get search query from URL
-  const urlObj = new URL(url);
-  const query = urlObj.searchParams.get('q');
-
-  // Check if searching for a bang
-  if (query && query.startsWith('!')) {
-    // Redirect to DuckDuckGo
-    return {
-      redirectUrl: `https://www.duckduckgo.com/?q=${encodeURIComponent(query)}`,
-    };
+async function updateBangs() {
+  try {
+    console.log("Fetching bangs from DuckDuckGo");
+    const res = await fetch("https://duckduckgo.com/bang.js");
+    const fetchedBangs = await res.json();
+    
+    if (fetchedBangs && fetchedBangs.length > 0) {
+      console.log(`Successfully loaded ${fetchedBangs.length} bangs`);
+      bangs = fetchedBangs;
+      // Store in storage for persistence
+      chrome.storage.local.set({ bangs: fetchedBangs });
+    } else {
+      console.error("Loaded bangs array was empty");
+      // Try loading from local storage as fallback
+      loadBangsFromStorage();
+    }
+  } catch (error) {
+    console.error('Failed to fetch bangs:', error);
+    // Try loading from local storage as fallback
+    loadBangsFromStorage();
   }
-}, {
-  urls: [
-    "http://www.google.com/search*", "http://www.google.co.jp/search*", "http://www.google.co.uk/search*", "http://www.google.es/search*", "http://www.google.ca/search*", "http://www.google.de/search*", "http://www.google.it/search*", "http://www.google.fr/search*", "http://www.google.com.au/search*", "http://www.google.com.tw/search*", "http://www.google.nl/search*", "http://www.google.com.br/search*", "http://www.google.com.tr/search*", "http://www.google.be/search*", "http://www.google.com.gr/search*", "http://www.google.co.in/search*", "http://www.google.com.mx/search*", "http://www.google.dk/search*", "http://www.google.com.ar/search*", "http://www.google.ch/search*", "http://www.google.cl/search*", "http://www.google.at/search*", "http://www.google.co.kr/search*", "http://www.google.ie/search*", "http://www.google.com.co/search*", "http://www.google.pl/search*", "http://www.google.pt/search*", "http://www.google.com.pk/search*", "https://www.google.com/search*", "https://www.google.co.jp/search*", "https://www.google.co.uk/search*", "https://www.google.es/search*", "https://www.google.ca/search*", "https://www.google.de/search*", "https://www.google.it/search*", "https://www.google.fr/search*", "https://www.google.com.au/search*", "https://www.google.com.tw/search*", "https://www.google.nl/search*", "https://www.google.com.br/search*", "https://www.google.com.tr/search*", "https://www.google.be/search*", "https://www.google.com.gr/search*", "https://www.google.co.in/search*", "https://www.google.com.mx/search*", "https://www.google.dk/search*", "https://www.google.com.ar/search*", "https://www.google.ch/search*", "https://www.google.cl/search*", "https://www.google.at/search*", "https://www.google.co.kr/search*", "https://www.google.ie/search*", "https://www.google.com.co/search*", "https://www.google.pl/search*", "https://www.google.pt/search*", "https://www.google.com.pk/search*"
-  ],
-}, [
-  "blocking" // Needed so we can redirect the request to DuckDuckGo - we aren't really blocking anything
-]);
+}
+
+// Load bangs from local storage
+async function loadBangsFromStorage() {
+  try {
+    const data = await chrome.storage.local.get(['bangs']);
+    if (data.bangs && data.bangs.length > 0) {
+      console.log(`Loaded ${data.bangs.length} bangs from storage`);
+      bangs = data.bangs;
+    }
+  } catch (error) {
+    console.error('Failed to load bangs from storage:', error);
+  }
+}
+
+// Initial fetch of bangs
+updateBangs();
+
+// Refresh bangs periodically
+chrome.alarms.create('updateBangs', { periodInMinutes: 60 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'updateBangs') {
+    updateBangs();
+  }
+});
+
+// Set default suggestion when extension is loaded
+chrome.omnibox.setDefaultSuggestion({
+  description: 'Type a DuckDuckGo bang (e.g., "yt" for YouTube)'
+});
+
+// Handle message requests from content script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "getBangs") {
+    sendResponse({ bangs: bangs });
+  }
+  return true;  // Indicates we want to use sendResponse asynchronously
+});
+
+// Debug function to show current state
+function debugState(text) {
+  console.log(`Debug [${text}]: ${bangs.length} bangs loaded`);
+}
+
+// Omnibox input started - triggered when the user types our keyword
+chrome.omnibox.onInputStarted.addListener(() => {
+  debugState("onInputStarted");
+  
+  // Make sure we have bangs loaded
+  if (bangs.length === 0) {
+    loadBangsFromStorage();
+    updateBangs();
+  }
+});
 
 // Omnibox Auto-Complete
-chrome.omnibox.onInputChanged.addListener((text, addSuggestions) => {
+chrome.omnibox.onInputChanged.addListener((text, suggest) => {
+  debugState(`onInputChanged: ${text}`);
+  
+  if (bangs.length === 0) {
+    console.log("Warning: No bangs loaded for suggestions");
+  }
+  
   let filterText = text.trim();
   if (filterText.indexOf("!") === 0) {
-      filterText = filterText.substr(1)
+    filterText = filterText.substr(1);
   }
-
+  
+  // Set a simple default suggestion first
   chrome.omnibox.setDefaultSuggestion({
-    description: 'Use Bang'
+    description: `Search DuckDuckGo with bang: <match>${text}</match>`
   });
 
-  let results = [];
-
-  for (let bang of bangs) {
+  // Build suggestions for matching bangs
+  const suggestions = [];
+  
+  for (const bang of bangs) {
     if (
       bang.t.startsWith(filterText) ||
-      bang.s.includes(filterText) ||
-      bang.d.includes(filterText)
+      bang.s.toLowerCase().includes(filterText.toLowerCase())
     ) {
-      // Shorter Bang => More relevant
-      let lengthRelevance = (10 - bang.t.length);
-      if (lengthRelevance > 0){
-        lengthRelevance = 0;
-      }
-
-      // Relevance based on the type of match
-      let typeRelevance = 0;
-      if (bang.t === filterText) {
-        // Exact match - set as default suggestion
-        chrome.omnibox.setDefaultSuggestion({
-          description: `!${bang.t} (${bang.s})`
-        });
-        continue;
-      } else if (bang.t.startsWith(filterText)) {
-        typeRelevance = 100;
-      } else if (bang.s.includes(filterText)) {
-        typeRelevance = 2;
-      }
-
-      const relevance = lengthRelevance + typeRelevance + bang.r;
-
-      results.push({
-        content: bang.t,
-        description: `!${bang.t} (${bang.s}), Rel: ${relevance}`,
-        relevance,
+      const relevance = bang.t === filterText ? 1000 : 
+                        bang.t.startsWith(filterText) ? 900 - bang.t.length :
+                        700;
+                        
+      suggestions.push({
+        content: `!${bang.t}`,
+        description: `<match>!${bang.t}</match> <dim>(${bang.s})</dim>`,
+        deletable: false
       });
     }
   }
-
-  // Sort based on relevance
-  results = results.sort((a, b) => b.relevance - a.relevance).slice(0, 10).map((item) => {
-    return {
-      content: item.content,
-      description: item.description,
-    };
-  });
-
-  addSuggestions(results);
+  
+  // Only send top 5 most relevant suggestions
+  const topSuggestions = suggestions
+    .slice(0, 5)
+    .sort((a, b) => {
+      // Sort by length (shorter is better)
+      return a.content.length - b.content.length;
+    });
+  
+  console.log(`Sending ${topSuggestions.length} suggestions`);
+  suggest(topSuggestions);
+  
+  // Update default suggestion if we found an exact match
+  if (topSuggestions.length > 0) {
+    const exactMatch = topSuggestions.find(s => s.content === `!${filterText}`);
+    if (exactMatch) {
+      chrome.omnibox.setDefaultSuggestion({
+        description: exactMatch.description
+      });
+    }
+  }
 });
 
 chrome.omnibox.onInputEntered.addListener((text, disposition) => {
   let bang = text.trim();
   if (bang.indexOf("!") === 0) {
-      bang = bang.substr(1)
+    bang = bang.substr(1);
   }
 
   const url = `https://www.duckduckgo.com/?q=${encodeURIComponent(`!${bang}`)}`;
 
   switch (disposition) {
     case "currentTab":
-      chrome.tabs.update({url});
+      chrome.tabs.update({ url });
       break;
     case "newForegroundTab":
-      chrome.tabs.create({url});
+      chrome.tabs.create({ url });
       break;
     case "newBackgroundTab":
-      chrome.tabs.create({url, active: false});
+      chrome.tabs.create({ url, active: false });
       break;
   }
 });
