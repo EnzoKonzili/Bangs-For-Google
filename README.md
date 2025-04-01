@@ -1,11 +1,11 @@
 <p align="center">
     <img src="icons/icon-500.png" height="300"><br />
-    <a href="https://addons.mozilla.org/en-US/firefox/addon/bangs-for-google/">
+    <!-- <a href="https://addons.mozilla.org/en-US/firefox/addon/bangs-for-google/">
         <img src="icons/firefox.png" alt="Available on Firefox Add-Ons" width="150">
     </a>
     <a href="https://chrome.google.com/webstore/detail/bangs-for-google/emidbfgmfdphfdldbmehojiocmljfonj">
         <img src="icons/chrome.png" alt="Available on chrome web store" width="150">
-    </a>
+    </a> -->
 </p>
 
 # Bangs for Google
@@ -21,7 +21,19 @@ Automatically use DuckDuckGo for [Bangs](https://duckduckgo.com/bang), keeping G
 - **Up-to-Date Bangs**: Regularly updates from DuckDuckGo's bang database
 
 ## Installation
-"Bangs for Google" is available through the [Firefox Add-On Platform](https://addons.mozilla.org/en-US/firefox/addon/bangs-for-google/) and [chrome web store](https://chrome.google.com/webstore/detail/bangs-for-google/emidbfgmfdphfdldbmehojiocmljfonj).
+The original "Bangs for Google" is available through the [Firefox Add-On Platform](https://addons.mozilla.org/en-US/firefox/addon/bangs-for-google/) and [chrome web store](https://chrome.google.com/webstore/detail/bangs-for-google/emidbfgmfdphfdldbmehojiocmljfonj).
+
+### Installing from source
+If you prefer to install the latest version directly from the source code:
+
+1. Download or clone this repository to your computer
+2. Open Chrome and navigate to `chrome://extensions`
+3. Enable "Developer mode" by toggling the switch in the top right corner
+4. Click the "Load unpacked" button
+5. Select the folder containing the extension files (the folder with manifest.json)
+6. The extension should now be installed and ready to use
+
+This method allows you to use the extension before it's available on the Chrome Web Store or to test your own modifications.
 
 ## How does it work? How is the performance?
 
