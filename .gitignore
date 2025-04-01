@@ -1,3 +1,13 @@
+# Chrome Extension generated files
+_metadata/
+*.pem
+*.crx
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# OS specific files
 .DS_Store
-*.zip
-*.txt
+Thumbs.db
