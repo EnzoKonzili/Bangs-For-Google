@@ -104,48 +104,110 @@ chrome.omnibox.onInputChanged.addListener((text, suggest) => {
   }
   
   // Set a simple default suggestion first
-  chrome.omnibox.setDefaultSuggestion({
-    description: `Search DuckDuckGo with bang: <match>${text}</match>`
-  });
+  try {
+    chrome.omnibox.setDefaultSuggestion({
+      description: `Search DuckDuckGo with bang: <match>${text}</match>`
+    });
+  } catch (err) {
+    console.error("Error setting default suggestion:", err);
+  }
 
-  // Build suggestions for matching bangs
-  const suggestions = [];
+  // Skip processing if query is empty
+  if (filterText.length === 0) {
+    return;
+  }
+
+  // Categorize matches by type for better sorting
+  const exactMatches = [];
+  const prefixMatches = [];
+  const partialMatches = [];
   
+  // For case-insensitive comparison
+  const lowerFilter = filterText.toLowerCase();
+  
+  // First pass - categorize matches by type
   for (const bang of bangs) {
-    if (
-      bang.t.startsWith(filterText) ||
-      bang.s.toLowerCase().includes(filterText.toLowerCase())
-    ) {
-      const relevance = bang.t === filterText ? 1000 : 
-                        bang.t.startsWith(filterText) ? 900 - bang.t.length :
-                        700;
-                        
-      suggestions.push({
+    // For case-insensitive matching
+    const bangTrigger = bang.t.toLowerCase();
+    const bangSite = bang.s.toLowerCase();
+    
+    // Exact match of the trigger (highest priority)
+    if (bangTrigger === lowerFilter) {
+      exactMatches.push({
         content: `!${bang.t}`,
         description: `<match>!${bang.t}</match> <dim>(${bang.s})</dim>`,
-        deletable: false
+        score: 1000 + (bang.r || 0)
+      });
+    } 
+    // Bang trigger starts with the filter text
+    else if (bangTrigger.startsWith(lowerFilter)) {
+      prefixMatches.push({
+        content: `!${bang.t}`,
+        description: `<match>!${bang.t}</match> <dim>(${bang.s})</dim>`,
+        score: 800 + (bang.r || 0) - (bang.t.length * 5) // Shorter bangs score higher
+      });
+    }
+    // Site name contains the filter text
+    else if (bangSite.includes(lowerFilter)) {
+      partialMatches.push({
+        content: `!${bang.t}`,
+        description: `<match>!${bang.t}</match> <dim>(${bang.s})</dim>`,
+        score: 500 + (bang.r || 0)
       });
     }
   }
   
-  // Only send top 5 most relevant suggestions
-  const topSuggestions = suggestions
-    .slice(0, 5)
-    .sort((a, b) => {
-      // Sort by length (shorter is better)
-      return a.content.length - b.content.length;
-    });
-  
-  console.log(`Sending ${topSuggestions.length} suggestions`);
-  suggest(topSuggestions);
-  
-  // Update default suggestion if we found an exact match
-  if (topSuggestions.length > 0) {
-    const exactMatch = topSuggestions.find(s => s.content === `!${filterText}`);
-    if (exactMatch) {
+  // If we have an exact match, set it as the default suggestion
+  if (exactMatches.length > 0) {
+    // Sort exact matches by their DuckDuckGo relevance
+    exactMatches.sort((a, b) => b.score - a.score);
+    const bestExactMatch = exactMatches[0];
+    
+    try {
+      // Update the default suggestion with the best exact match
       chrome.omnibox.setDefaultSuggestion({
-        description: exactMatch.description
+        description: bestExactMatch.description
       });
+    } catch (err) {
+      console.error("Error setting exact match default suggestion:", err);
+    }
+  }
+  
+  // Combine and sort all matches
+  const allMatches = [
+    ...exactMatches,
+    ...prefixMatches.sort((a, b) => b.score - a.score),
+    ...partialMatches.sort((a, b) => b.score - a.score)
+  ];
+  
+  // Remove the best exact match if it exists (already shown as default)
+  const suggestionsToShow = exactMatches.length > 0 
+    ? allMatches.slice(1, 6)  // Skip the first one which is the default suggestion
+    : allMatches.slice(0, 5); // Show top 5
+  
+  // Prepare final suggestions
+  const finalSuggestions = suggestionsToShow.map(match => ({
+    content: match.content,
+    description: match.description
+  }));
+  
+  console.log(`Sending ${finalSuggestions.length} suggestions`);
+  
+  // Send suggestions to Chrome - try handling potential errors
+  try {
+    suggest(finalSuggestions);
+  } catch (error) {
+    console.error("Error providing suggestions:", error);
+    
+    // Try with simpler formatting if the rich formatting failed
+    try {
+      const simpleSuggestions = finalSuggestions.map(s => ({
+        content: s.content,
+        description: s.content
+      }));
+      suggest(simpleSuggestions);
+    } catch (fallbackError) {
+      console.error("Even simplified suggestions failed:", fallbackError);
     }
   }
 });
@@ -158,15 +220,23 @@ chrome.omnibox.onInputEntered.addListener((text, disposition) => {
 
   const url = `https://www.duckduckgo.com/?q=${encodeURIComponent(`!${bang}`)}`;
 
-  switch (disposition) {
-    case "currentTab":
-      chrome.tabs.update({ url });
-      break;
-    case "newForegroundTab":
-      chrome.tabs.create({ url });
-      break;
-    case "newBackgroundTab":
-      chrome.tabs.create({ url, active: false });
-      break;
+  try {
+    switch (disposition) {
+      case "currentTab":
+        chrome.tabs.update({ url });
+        break;
+      case "newForegroundTab":
+        chrome.tabs.create({ url });
+        break;
+      case "newBackgroundTab":
+        chrome.tabs.create({ url, active: false });
+        break;
+      default:
+        chrome.tabs.update({ url });
+    }
+  } catch (err) {
+    console.error("Error handling navigation:", err);
+    // Fallback to simple tab creation if there was an error
+    chrome.tabs.create({ url });
   }
 });

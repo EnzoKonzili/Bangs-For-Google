@@ -12,6 +12,8 @@
   "description": "Use DuckDuckGo Bangs in the Google Search",
   "homepage_url": "https://github.com/EnzoKonzili/Bangs-For-Google",
 
+  "incognito": "split",
+
   "permissions": [
     "declarativeNetRequest",
     "omnibox",
